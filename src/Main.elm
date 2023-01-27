@@ -6,9 +6,11 @@ module Main exposing(..)
 --
 
 import Browser
-import Html exposing (Html, text, pre)
+import Html exposing (Html, text, pre, p, div)
 import Http
-
+import Html.Attributes exposing (style)
+import Html exposing (a)
+-- import Debug
 
 
 -- MAIN
@@ -30,14 +32,14 @@ main =
 type Model
   = Failure
   | Loading
-  | Success String
+  | Success (List String)
 
 
 init : () -> (Model, Cmd Msg)
 init _ =
   ( Loading
   , Http.get
-      { url = "http://localhost:8000/elp_words.txt"
+      { url = "../elp_words.txt"
       , expect = Http.expectString GotText
       }
   )
@@ -57,7 +59,7 @@ update msg model =
     GotText result ->
       case result of
         Ok fullText ->
-          (Success fullText, Cmd.none)
+          (Success (String.split " " fullText), Cmd.none)
 
         Err _ ->
           (Failure, Cmd.none)
@@ -86,4 +88,8 @@ view model =
       text "Loading..."
 
     Success fullText ->
-      pre [] [ text fullText ]
+      div [] [ text (getElement 657 fullText) ]
+
+getElement : Int -> (List String) -> String
+getElement n lst =
+  Maybe.withDefault "a" (List.head (List.drop n lst)) 
