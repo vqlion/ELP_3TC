@@ -106,7 +106,7 @@ init : () -> (Model, Cmd Msg)
 init _ =
   ( Model [] [] " " Loading  " " " " " "
   , Http.get
-      { url = "http://localhost:8000/elp_words.txt"
+      { url = "../elp_words.txt"
       , expect = Http.expectString GotWord
       }
   )
@@ -179,21 +179,42 @@ view model =
       text "Loading..."
 
     Success (result) -> 
-      div [] [
-        div[] [(welcomeMessage)],
-        div[] (convertData result),
-        div [] [text (model.guessed)],
-        div []
+      div [ style "display" "flex"
+          , style "flex-direction" "column"
+          , style "align-items" "center"
+          , style "justify-content" "space-evenly"
+          , style "gap" "1vh"
+          , style "background-color" "lightcoral"
+          , style "width" "fit-content"
+          , style "min-width" "30vw"
+          , style "max-width" "75vw"
+          , style "margin" "auto"
+          , style "margin-top" "5vh"
+          , style "margin-bottom" "5vh"
+          , style "box-shadow" "4px 4px 2px black"
+          , style "padding" "20px"
+          , style "font-family" "arial"
+          ] [
+        h1 [ style "margin" "0" ] [(welcomeMessage)],
+        h3 [ style "margin" "0" ] [text "Try to guess the word below based on its definition"],
+        div[ style "color" "black", style "font-size" "large",  style "font-family" "auto" ] (convertData result),
+        div [ style "text-transform" "capitalize", style "font-size" "large", style "font-family" "auto" ] [text (model.guessed)],
+        div [ style "display" "flex"
+            , style "flex-direction" "column"
+            , style "justify-content" "center"
+            ]
           [ 
-            input [ placeholder "Text to reverse", Html.Attributes.value model.load, onInput Change ] []
+            input [ placeholder "Guess the word", Html.Attributes.value model.load, onInput Change, style "width" "30%", style "margin" "auto", style "margin-bottom" "10px" ] []
           ,
             if String.toLower model.load==String.toLower model.selectedWord then 
-            div [] [ text ( model.newLoad) ]
+            div [ style "font-size" "large" ] [ text ( model.newLoad) ]
             else 
-            div [] [  ( failureMessage) ]
+            div [ style "font-size" "large" ] [  ( failureMessage) ]
           ],
-          div [] [convert(button [ onClick (Guessed)] [ text "Show answer" ])],
-          div [] [button [ onClick (Next)] [ text "New" ]]
+          div [ style "display" "flex", style "gap" "20px" ] [
+            div [ style "font-size" "large" ] [convert(button [ onClick (Guessed)] [ text "Show answer" ])],
+            div [ style "font-size" "large" ] [button [ onClick (Next)] [ text "Get a new word" ]]
+          ]
         ]  
 
 convert : Html (String -> Msg) -> Html Msg
@@ -202,21 +223,30 @@ convert html =
     
 viewMeaning : Meaning -> Html Msg 
 viewMeaning display1 = 
-  li []
+  li [ style "font-weight" "bold" 
+     , style "text-transform" "capitalize"
+     , style "padding" "5px"
+     ]
     [text display1.partOfSpeech
-    ,ul [] (List.map viewDefinition display1.definitions)
+    ,ul [ style "font-weight" "normal" 
+        , style "text-transform" "none"
+        , style "list-style" "arabic"
+        ] 
+        (List.map viewDefinition display1.definitions)
     ]
 
 viewDefinition : Definitions -> Html Msg
 viewDefinition display2 =
-  div [] 
-    [text display2.definition]
+  li [] 
+    [div [ style "font-style" "italic" 
+         , style "padding-left" "5px" 
+         ] [text display2.definition]]
 
 viewWordDefinition : WordDefinition -> Html Msg
 viewWordDefinition display3 = 
   div []
   [
-    ul [] (List.map viewMeaning display3.meanings)
+    ul [ style "list-style" "none" ] (List.map viewMeaning display3.meanings)
   ]
 
 convertData : WordDefinitions -> List (Html Msg)
@@ -230,7 +260,7 @@ welcomeMessage : Html Msg
 welcomeMessage =
   div[] 
   [
-    text "Welcome in our game"
+    text "Welcome to guess the word!"
   ]
 
 failureMessage : Html Msg
