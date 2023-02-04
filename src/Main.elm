@@ -106,7 +106,7 @@ init : () -> (Model, Cmd Msg)
 init _ =
   ( Model [] [] " " Loading  " " " " " "
   , Http.get
-      { url = "../elp_words.txt"
+      { url = "../words.txt"
       , expect = Http.expectString GotWord
       }
   )
