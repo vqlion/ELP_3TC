@@ -1,61 +1,62 @@
-module Main exposing (..)
+module Main exposing(..)
 -- Make a GET request to load a book called "Public Opinion"
 --
 -- Read how it works:
---   https://guide.elm-lang.org/effects/http.html
---
+--   https://guide.elm-lang.org/effects/http.htmls
 
 import Browser
-import Array 
-import String
-import Random
-import Html exposing (..)
-import Html exposing (Html, Attribute, button, div, form, h1, input, text)
-import Html.Attributes exposing (style)
-import Html.Events exposing (..)
-import Html.Events exposing (onInput, onClick)
 import Http
-import Json.Decode exposing (Decoder, decodeString,at, map4, map2, map3, map, field, int, list, string)
+import Html exposing (..)
+import Html.Events exposing (onInput,onClick)
+import Html.Attributes exposing (..)
+import Http
+import Random
+import Task
+import Json.Decode as Decode exposing  (..)
+import Svg
+import Browser.Navigation exposing (load)
+
 -- import Debug
 
 
--- MAIN
+------------------------MAIN------------------------
 
 
 main =
   Browser.element
-    { init = getRandomDef
+    { init = init
     , update = update
     , subscriptions = subscriptions
     , view = view
     }
 
--- MODEL
+------------------------MODEL------------------------
 
+type alias Model =
+  { def_list : WordDefinitions
+  , word_list : List String
+  , selectedWord : String
+  , state : State 
+  , guessed : String
+  , load : String
+  , newLoad : String
+  }
 type State
   = Failure
   | Loading
-  | Success 
+  | Success (WordDefinitions)
 
-type alias Model =
-  { def_list : List WordDefinition
-  , word_list : List String
-  , selectedWord : String
-  , random_index : Int
-  , state : State 
-  }
+------------------------TYPES------------------------
 
 type alias WordDefinition =
   {
-    origin : String
-  , word : String
+    word : String
   , meanings : List Meaning
   }
 
 type alias Definitions = 
   {
     definition : String 
-  , example : String 
   }
 
 type alias Meaning = 
@@ -64,61 +65,59 @@ type alias Meaning =
   , definitions : List Definitions
   }
 
-wordDecoder : Decoder WordDefinition
-wordDecoder =
-  map3 WordDefinition
-    (field "origin" string)
-    (field "word" string )
-    (field "meanings" <| list meaningsDecoder)
-
-meaningsDecoder : Decoder Meaning
-meaningsDecoder = 
-  map2 Meaning 
-    (field "partOfSpeech" string)
-    (field "definitions" <| list definitionsDecoder)
-
-definitionsDecoder : Decoder Definitions
-definitionsDecoder = 
-  map2 Definitions
-    (field "definition" string)
-    (field "example" string)
-
 type alias WordDefinitions = List WordDefinition 
 type alias Meanings = List Meaning
 type alias ListDefinitions = List Definitions
 
 type Msg
-  = GotDefinition (Result Http.Error WordDefinitions)
-  | GotWord (Result Http.Error String)
+  = GotWord (Result Http.Error String)
   | Random_nb Int 
-  
+  | GotDefinition (Result Http.Error WordDefinitions)
+  | Guessed String
+  | Change String
+  | Next
 
------------------GETTING WORD AND DEFINITION------------------
+----------------------DECODERS----------------------
+
+recupereJson : Decode.Decoder WordDefinitions
+recupereJson = 
+  Decode.list wordDecoder
+
+wordDecoder : Decode.Decoder WordDefinition
+wordDecoder =
+  Decode.map2 WordDefinition
+    (Decode.field "word" Decode.string )
+    (Decode.field "meanings" <| Decode.list meaningsDecoder)
+
+meaningsDecoder : Decode.Decoder Meaning
+meaningsDecoder = 
+  Decode.map2 Meaning 
+    (Decode.field "partOfSpeech" Decode.string)
+    (Decode.field "definitions" <| Decode.list definitionsDecoder)
+
+definitionsDecoder : Decode.Decoder Definitions
+definitionsDecoder = 
+  Decode.map Definitions
+    (Decode.field "definition" Decode.string) 
+
+---------------GETTING WORD AND DEFINITION---------------
+
 init : () -> (Model, Cmd Msg)
 init _ =
-  ( Model [] [] "" 0 Loading
+  ( Model [] [] " " Loading  " " " " " "
   , Http.get
-      { url = "../elp_words.txt"
+      { url = "http://localhost:8000/elp_words.txt"
       , expect = Http.expectString GotWord
       }
   )
 
-getRandomDef : (Model) -> (Model, Cmd Msg)
-getRandomDef model =
-  ( {model| state=Loading}
-  , Http.get
-      { url = "https://api.dictionaryapi.dev/api/v2/entries/en/"
-    , expect = Http.expectJson GotDefinition (list wordDecoder)
-      }
-  )
-
--- UPDATE
+-------------------------UPDATE-------------------------
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     GotWord (Ok text) ->
       ({
-        model | word_list = String.words text
+        model | word_list = String.split " " text
       }
       ,
         Random.generate Random_nb (Random.int 0 999)
@@ -130,18 +129,18 @@ update msg model =
       )
 
     Random_nb nb->
-      let mot=Maybe.withDefault "" (List.head (List.drop nb model.word_list))
+      let mot=Maybe.withDefault " " (List.head (List.drop nb model.word_list))
       in ({
         model|selectedWord=mot}, Http.get
-          { url = "https://api.dictionaryapi.dev/api/v2/entries/en/" ++ mot
-          , expect = Http.expectJson GotDefinition (list wordDecoder)
+          { url = ("https://api.dictionaryapi.dev/api/v2/entries/en/"++mot)
+          , expect = Http.expectJson GotDefinition recupereJson
           })
       
     GotDefinition def ->
       case def of
         Ok define -> 
           ({
-            model | def_list=define , state = Success 
+            model | def_list = define , state = Success (define)
           }
           , Cmd.none)
 
@@ -151,39 +150,61 @@ update msg model =
           }
           , Cmd.none)
 
+    Guessed expr->
+      let guess=model.selectedWord
+      in ({model|guessed=guess}, Cmd.none)
     
-
- 
-    -- SUBSCRIPTIONS
+    Change message-> 
+      let load=""
+      in ({model|load=message, newLoad ="You guessed the word ! Congratulations ! You can restart now "}, Cmd.none)
+    
+    Next -> (model, Random.generate Random_nb (Random.int 0 999))
+     
+---------------------SUBSCRIPTIONS---------------------
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
   Sub.none
 
-
-------------------VIEW------------------
+-------------------------VIEW--------------------------
 
 view : Model -> Html Msg
 view model =
   case model.state of
     Failure ->
-      text ("I was unable to load your book.")
-
+      div[][
+        text ("I was unable to load your book.")
+      ]
     Loading ->
       text "Loading..."
 
-    Success -> 
+    Success (result) -> 
       div [] [
-        text ("hello")
-      ]
+        div[] [(welcomeMessage)],
+        div[] (convertData result),
+        div [] [text (model.guessed)],
+        div []
+          [ 
+            input [ placeholder "Text to reverse", Html.Attributes.value model.load, onInput Change ] []
+          ,
+            if String.toLower model.load==String.toLower model.selectedWord then 
+            div [] [ text ( model.newLoad) ]
+            else 
+            div [] [  ( failureMessage) ]
+          ],
+          div [] [convert(button [ onClick (Guessed)] [ text "Show answer" ])],
+          div [] [button [ onClick (Next)] [ text "New" ]]
+        ]  
 
-
-
+convert : Html (String -> Msg) -> Html Msg
+convert html =
+    Html.map (\toMsg -> toMsg "") html
+    
 viewMeaning : Meaning -> Html Msg 
 viewMeaning display1 = 
-  div []
+  li []
     [text display1.partOfSpeech
-    , ul [] (List.map viewDefinition display1.definitions)
+    ,ul [] (List.map viewDefinition display1.definitions)
     ]
 
 viewDefinition : Definitions -> Html Msg
@@ -194,187 +215,29 @@ viewDefinition display2 =
 viewWordDefinition : WordDefinition -> Html Msg
 viewWordDefinition display3 = 
   div []
-  [ text display3.origin]
+  [
+    ul [] (List.map viewMeaning display3.meanings)
+  ]
 
-convertData : List WordDefinition -> List (Html Msg)
-convertData donnees =
-    List.map (\donne -> convertDonne donne) donnees
-
-convertDonne : WordDefinition -> Html Msg
-convertDonne donne =
-    let
-        word = donne.word
-        meanings = donne.meanings
-    in
-        div []
-            [ --h2 [] [text word]
-             ul [] (List.map viewMeaning meanings)
-            ]
+convertData : WordDefinitions -> List (Html Msg)
+convertData data =
+   List.map (\display3 -> viewWordDefinition display3) data
 
 
+-------------------------GAME-------------------------
 
--- -- Make a GET request to load a book called "Public Opinion"
--- --
--- -- Read how it works:
--- --   https://guide.elm-lang.org/effects/http.html
--- --
+welcomeMessage : Html Msg
+welcomeMessage =
+  div[] 
+  [
+    text "Welcome in our game"
+  ]
 
--- import Browser
--- import Html exposing (Html, text, pre, p, div)
--- import Http
--- import Html.Attributes exposing (style)
--- import Html exposing (a)
--- import Html exposing (Html, button, div, text)
--- import Html.Events exposing (onClick)
--- import Json.Decode exposing (Decoder, decodeString,at, map4, map2, map3, map, field, int, list, string)
--- import Random
-
--- -- import Debug
+failureMessage : Html Msg
+failureMessage =
+  div[] 
+  [
+    text "You didn't guess the word, try again or skip to the next one"
+  ]
 
 
--- -- MAIN
-
--- main =
---   Browser.element
---     { init = init
---     , update = update
---     , subscriptions = subscriptions
---     , view = view
---     }
-
--- ---------------------------WORD---------------------------
-
--- type alias Model =
---   { word_list : List String
---   , selectedWord : String
---   , state : State
---   }
-
--- type State
---   = Failure
---   | Loading
---   | Success String
-
-
--- type Msg
---   = GotText (Result Http.Error String)
---   | Random_nb Int
-
-
--- init : () -> (Model, Cmd Msg)
--- init _ =
---   ( Model [] "" Loading
---   , Http.get
---       { url = "../elp_words.txt"
---       , expect = Http.expectString GotText
---       }
---   )
-
--- -----------------------JSON-------------------------
--- type alias Model =
---   { word_list : List WordDefinition
---   , selectedWord : String
---   , random_index : Int
---   , state : State 
---   }
-
--- type alias WordDefinition =
---   {
---     origin : String
---   , word : String
---   , meanings : List Meaning
---   }
-
--- type alias Definitions = 
---   {
---     definition : String 
---   , example : String 
---   }
-
--- type alias Meaning = 
---   {
---     partOfSpeech : String 
---   , definitions : List Definitions
---   }
-
--- wordDecoder : Decoder WordDefinition
--- wordDecoder =
---   map3 WordDefinition
---     (field "origin" string)
---     (field "word" string )
---     (field "meanings" <| list meaningsDecoder)
-
--- meaningsDecoder : Decoder Meaning
--- meaningsDecoder = 
---   map2 Meaning 
---     (field "partOfSpeech" string)
---     (field "definitions" <| list definitionsDecoder)
-
--- definitionsDecoder : Decoder Definitions
--- definitionsDecoder = 
---   map2 Definitions
---     (field "definition" string)
---     (field "example" string)
-
--- type alias WordDefinitions = List WordDefinition 
--- type alias Meanings = List Meaning
--- type alias ListDefinitions = List Definitions
-
--- type Msg
---   = GotDefinition (Result Http.Error WordDefinition)
---   | Random_nb Int 
-  
-
--- getRandomDef : (Model) -> (Model, Cmd Msg)
--- getRandomDef model =
---   ( {model| state=Loading}
---   , Http.get
---       { url = "https://api.dictionaryapi.dev/api/v2/entries/en/hello"
---     , expect = Http.expectJson GotDefinition wordDecoder
---       }
---   )
--- ----------------------UPDATE------------------------
--- update : Msg -> Model -> (Model, Cmd Msg)
--- update msg model =
---   case msg of
---     GotText (Ok text) ->
---       ({
---         model | word_list = String.words text
---       }
---       ,
---         Random.generate Random_nb (Random.int 0 999)
---       )
---     Random_nb nb->
---       ({model | selectedWord = Maybe.withDefault "" (List.head (List.drop nb model.word_list))
---       }
---       ,
---       Cmd.none)
---     -- FindRandom ->
---     --         (model, Random.generate Random_nb (Random.int 0 (List.length model.word_list - 1)))
-
-
---     --     selected = Array.fromList model.word_list
---     --             |> Array.get rn
---     --   in
---     --     ({ model | selected = selected }, Cmd.none)
-
---     GotText (Err _) ->
---       ({model| state = Failure}
---       , Cmd.none
---       )
-
--- subscriptions : Model -> Sub Msg
--- subscriptions model =
---   Sub.none
-
-
-
--- -----------------------VIEW--------------------------
-
--- view : Model -> Html Msg
--- view model =
---   div []
---     [ text "Selected word: "
---     , text model.selectedWord
---     -- ,button [ onClick index ] [ text "Random word" ]
---     ]
